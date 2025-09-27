@@ -1,0 +1,29 @@
+# Django এবং বেসিক
+pip install django
+
+# Django REST Framework
+pip install djangorestframework
+pip install djangorestframework-simplejwt
+pip install django-filter
+
+# dj-rest-auth (REST auth system)
+pip install dj-rest-auth
+
+# django-allauth (social login)
+pip install django-allauth
+
+# CORS headers
+pip install django-cors-headers
+
+# drf-yasg (Swagger/OpenAPI docs)
+pip install drf-yasg
+
+# unfold admin panel
+pip install django-unfold
+
+# Whitenoise (static file serving)
+pip install whitenoise
+
+pip install requests
+pip install cryptography
+
