@@ -1,108 +1,38 @@
+# cardealing/permissions.py
 from rest_framework import permissions
-from django.contrib.auth.models import User
 
-
-class IsOwnerOrReadOnly(permissions.BasePermission):
+class CardealingHasDynamicModelPermission(permissions.BasePermission):
     """
-    Custom permission to only allow owners of an object to edit it.
+    Custom permission to only allow users with the appropriate permissions based on the model.
     """
-    
-    def has_object_permission(self, request, view, obj):
-        # Read permissions are allowed to any request,
-        # so we'll always allow GET, HEAD or OPTIONS requests.
+    def has_permission(self, request, view):
+        # Determine the model name dynamically from the viewset.
+        model_name = view.queryset.model._meta.model_name
+        # Map HTTP methods to permission types.
         if request.method in permissions.SAFE_METHODS:
-            return True
-        
-        # Write permissions are only allowed to the owner of the object.
-        return obj.user == request.user
-
-
-class IsDealerOrAdmin(permissions.BasePermission):
-    """
-    Custom permission to only allow dealers or admin users.
-    """
-    
-    def has_permission(self, request, view):
-        if request.user.is_staff:
-            return True
-        
-        return hasattr(request.user, 'dealer_profile')
-
-
-class IsCustomer(permissions.BasePermission):
-    """
-    Custom permission to only allow customers.
-    """
-    
-    def has_permission(self, request, view):
-        return hasattr(request.user, 'customer_profile')
-
-
-class IsApprovedDealer(permissions.BasePermission):
-    """
-    Custom permission to only allow approved dealers.
-    """
-    
-    def has_permission(self, request, view):
-        if request.user.is_staff:
-            return True
-        
-        if hasattr(request.user, 'dealer_profile'):
-            return request.user.dealer_profile.is_approved and request.user.dealer_profile.is_active
-        
-        return False
-
-
-class IsBookingParticipant(permissions.BasePermission):
-    """
-    Custom permission to only allow booking participants (customer or dealer).
-    """
+            perm_action = 'view'
+        elif request.method == 'POST':
+            perm_action = 'add'
+        elif request.method in ['PUT', 'PATCH']:
+            perm_action = 'change'
+        elif request.method == 'DELETE':
+            perm_action = 'delete'
+        else:
+            return False
+        # Check if the user has the required permission.
+        required_permission = f'cardealing.{perm_action}_{model_name}'
+        return request.user.has_perm(required_permission)
     
     def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
-            return True
-        
-        # Check if user is the customer
-        if obj.customer == request.user:
-            return True
-        
-        # Check if user is the dealer
-        if hasattr(request.user, 'dealer_profile') and obj.service_slot.service.dealer == request.user:
-            return True
-        
-        return False
-
-
-class CanManageService(permissions.BasePermission):
-    """
-    Custom permission to only allow service owners or admin to manage services.
-    """
-    
-    def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
-            return True
-        
-        return obj.dealer == request.user
-
-
-class CanViewFinancialData(permissions.BasePermission):
-    """
-    Custom permission for viewing financial data.
-    """
-    
-    def has_permission(self, request, view):
-        if request.user.is_staff:
-            return True
-        
-        # Dealers can view their own financial data
-        return hasattr(request.user, 'dealer_profile')
-    
-    def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
-            return True
-        
-        # Check if the financial data belongs to the dealer
-        if hasattr(obj, 'dealer') and obj.dealer == request.user:
-            return True
-        
-        return False
+        # Similar to has_permission, but checks permissions on an object level.
+        model_name = obj._meta.model_name
+        if request.method in permissions.SAFE_METHODS:
+            perm_action = 'view'
+        elif request.method in ['PUT', 'PATCH']:
+            perm_action = 'change'
+        elif request.method == 'DELETE':
+            perm_action = 'delete'
+        else:
+            return False
+        required_permission = f'cardealing.{perm_action}_{model_name}'
+        return request.user.has_perm(required_permission, obj)
