@@ -157,43 +157,48 @@ def get_navigation_for_user(request):
                 },
             ],
         },
-        {
-            "title": _("Service Management"),
-            "separator": True,
-            "collapsible": True,
-            "items": [
-                {
-                    "title": _("Service Categories"),
-                    "icon": "category",
-                    "link": "/admin/cardealing/servicecategory/",
-                },
-                {
-                    "title": _("Services"),
-                    "icon": "build",
-                    "link": "/admin/cardealing/service/",
-                },
-                {
-                    "title": _("Service Addons"),
-                    "icon": "add_circle",
-                    "link": "/admin/cardealing/serviceaddon/",
-                },
-                {
-                    "title": _("Technicians"),
-                    "icon": "engineering",
-                    "link": "/admin/cardealing/technician/",
-                },
-                {
-                    "title": _("Service Slots"),
-                    "icon": "event",
-                    "link": "/admin/cardealing/serviceslot/",
-                },
-                {
-                    "title": _("Service Availability"),
-                    "icon": "event_available",
-                    "link": "/admin/cardealing/serviceavailability/",
-                },
-            ],
-        },
+       {
+        "title": _("Service Management"),
+        "separator": True,
+        "collapsible": True,
+        "items": [
+            {
+                "title": _("Service Categories"),
+                "icon": "category",
+                "link": "/admin/cardealing/servicecategory/",
+            },
+            {
+                "title": _("Services"),
+                "icon": "build",
+                "link": "/admin/cardealing/service/",
+            },
+            {
+                "title": _("Slot Templates"),
+                "icon": "schedule",
+                "link": "/admin/cardealing/slottemplate/",
+            },
+            {
+                "title": _("Service Addons"),
+                "icon": "add_circle",
+                "link": "/admin/cardealing/serviceaddon/",
+            },
+            {
+                "title": _("Technicians"),
+                "icon": "engineering",
+                "link": "/admin/cardealing/technician/",
+            },
+            {
+                "title": _("Service Slots"),
+                "icon": "event",
+                "link": "/admin/cardealing/serviceslot/",
+            },
+            {
+                "title": _("Service Availability"),
+                "icon": "event_available",
+                "link": "/admin/cardealing/serviceavailability/",
+            },
+        ],
+    },
         {
             "title": _("Bookings & Payments"),
             "separator": True,
