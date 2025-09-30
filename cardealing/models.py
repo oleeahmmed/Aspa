@@ -345,9 +345,7 @@ class Service(models.Model):
     advance_booking_hours = models.PositiveIntegerField(default=2)
     cancellation_hours = models.PositiveIntegerField(default=24)
     
-    # Features
-    includes = models.JSONField(default=list, help_text="What's included in service")
-    requirements = models.JSONField(default=list, help_text="Customer requirements")
+
     
     # Service Type
     service_location = models.CharField(
