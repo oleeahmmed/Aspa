@@ -460,51 +460,63 @@ class SlotTemplate(models.Model):
     
     def __str__(self):
         return f"{self.service.name} - {self.get_day_of_week_display()} {self.start_time}-{self.end_time}"
-    
+        
     def generate_slots_for_days(self, days_count):
         """
         Generate slots for specified number of days from today
         """
         from django.utils import timezone
         from datetime import timedelta
-        
+
+        # Check if template is active
+        if not self.is_active:
+            return []
+
         generated_slots = []
         start_date = timezone.now().date()
         end_date = start_date + timedelta(days=days_count)
         current_date = start_date
-        
+
         while current_date <= end_date:
+            # Check if current date matches the template's day of week
             if current_date.weekday() == self.day_of_week:
                 # Check if current date is within valid period
-                if (self.valid_from <= current_date <= (self.valid_until or current_date)):
-                    slots = self._calculate_time_slots()
-                    
-                    for slot_start, slot_end in slots:
-                        # Check if slot already exists
-                        if not ServiceSlot.objects.filter(
+                if self.valid_from and current_date < self.valid_from:
+                    current_date += timedelta(days=1)
+                    continue
+
+                if self.valid_until and current_date > self.valid_until:
+                    current_date += timedelta(days=1)
+                    continue
+
+                # Calculate time slots for this day
+                slots = self._calculate_time_slots()
+
+                for slot_start, slot_end in slots:
+                    # Check if slot already exists
+                    if not ServiceSlot.objects.filter(
+                        service=self.service,
+                        date=current_date,
+                        start_time=slot_start
+                    ).exists():
+
+                        slot = ServiceSlot.objects.create(
                             service=self.service,
+                            slot_template=self,
                             date=current_date,
-                            start_time=slot_start
-                        ).exists():
-                            
-                            slot = ServiceSlot.objects.create(
-                                service=self.service,
-                                slot_template=self,
-                                date=current_date,
-                                start_time=slot_start,
-                                end_time=slot_end,
-                                total_capacity=self.total_capacity,
-                                available_capacity=self.total_capacity,
-                                custom_price=self.custom_price,
-                                is_generated_from_template=True,
-                                generation_notes=f"Generated from template: {self.name}"
-                            )
-                            generated_slots.append(slot)
-            
+                            start_time=slot_start,
+                            end_time=slot_end,
+                            total_capacity=self.total_capacity,
+                            available_capacity=self.total_capacity,
+                            custom_price=self.custom_price,
+                            is_generated_from_template=True,
+                            generation_notes=f"Generated from template: {self.name}"
+                        )
+                        generated_slots.append(slot)
+
             current_date += timedelta(days=1)
-        
+
         return generated_slots
-    
     def generate_slots_7_days(self):
         """Generate slots for next 7 days"""
         return self.generate_slots_for_days(7)
@@ -522,14 +534,18 @@ class SlotTemplate(models.Model):
         Calculate time slots between start and end time
         """
         from datetime import datetime, time, timedelta
-        
+
         slots = []
         current_time = datetime.combine(datetime.today(), self.start_time)
         end_datetime = datetime.combine(datetime.today(), self.end_time)
-        
+
+        # If start_time is after end_time, return empty list
+        if current_time >= end_datetime:
+            return slots
+
         slot_duration_delta = timedelta(minutes=self.slot_duration)
         buffer_delta = timedelta(minutes=self.buffer_between_slots)
-        
+
         while current_time + slot_duration_delta <= end_datetime:
             slot_end = current_time + slot_duration_delta
             slots.append((
@@ -537,7 +553,7 @@ class SlotTemplate(models.Model):
                 slot_end.time()
             ))
             current_time = slot_end + buffer_delta
-        
+
         return slots
 
 class ServiceSlot(models.Model):
