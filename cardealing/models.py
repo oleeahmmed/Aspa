@@ -336,10 +336,10 @@ class Service(models.Model):
     max_concurrent_slots = models.PositiveIntegerField(default=1, help_text="Max simultaneous bookings")
     
     # Vehicle Support
-    supported_makes = models.ManyToManyField(VehicleMake, blank=True)
-    supported_fuel_types = models.JSONField(default=list)
-    min_year = models.PositiveIntegerField(null=True, blank=True)
-    max_year = models.PositiveIntegerField(null=True, blank=True)
+    # supported_makes = models.ManyToManyField(VehicleMake, blank=True)
+    # supported_fuel_types = models.JSONField(default=list)
+    # min_year = models.PositiveIntegerField(null=True, blank=True)
+    # max_year = models.PositiveIntegerField(null=True, blank=True)
     
     # Business Rules
     advance_booking_hours = models.PositiveIntegerField(default=2)
