@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "Authentication",
     "core",
     'cardealing',
+    'payment',
 ]
 
 SITE_ID = 1
