@@ -120,8 +120,8 @@ class DealerProfile(models.Model):
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=10, blank=True)
-    latitude = models.DecimalField(max_digits=20, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=20, decimal_places=6, null=True, blank=True)
+    latitude = models.DecimalField(max_digits=20, decimal_places=19, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=20, decimal_places=19, null=True, blank=True)
     service_radius = models.PositiveIntegerField(default=10, blank=True, help_text="Service radius in KM")
     
     # Optional Contact Information
