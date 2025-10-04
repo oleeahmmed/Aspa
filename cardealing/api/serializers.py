@@ -132,13 +132,20 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         model = CustomerProfile
         fields = '__all__'
         read_only_fields = ['user', 'total_bookings', 'total_spent', 'loyalty_points', 
-                           'created_at', 'updated_at']
+                            'created_at', 'updated_at']
+
+    def validate(self, data):
+        # Custom validation for preferred_notification
+        if data.get('preferred_notification') in ['sms', 'both'] and not data.get('phone_number'):
+            raise serializers.ValidationError('Phone number required for SMS notifications.')
+        return data
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubscriptionPlan
         fields = '__all__'
         read_only_fields = ['created_at']
+
 
 class DealerProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
@@ -149,7 +156,15 @@ class DealerProfileSerializer(serializers.ModelSerializer):
         model = DealerProfile
         fields = '__all__'
         read_only_fields = ['user', 'rating', 'total_reviews', 'total_bookings', 
-                           'current_balance', 'api_key', 'created_at', 'updated_at']
+                            'current_balance', 'api_key', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        # Custom validation for latitude/longitude (optional, but ensure format)
+        if 'latitude' in data and not (-90 <= data['latitude'] <= 90):
+            raise serializers.ValidationError('Latitude must be between -90 and 90.')
+        if 'longitude' in data and not (-180 <= data['longitude'] <= 180):
+            raise serializers.ValidationError('Longitude must be between -180 and 180.')
+        return data
 
 class CommissionHistorySerializer(serializers.ModelSerializer):
     dealer_name = serializers.CharField(source='dealer.business_name', read_only=True)
