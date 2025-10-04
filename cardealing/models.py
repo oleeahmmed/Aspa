@@ -94,7 +94,6 @@ class SubscriptionPlan(models.Model):
     
     def __str__(self):
         return f"{self.name} - ${self.price}"
-
 class DealerProfile(models.Model):
     """Simplified Dealer Profile - Most fields are optional"""
     
@@ -120,8 +119,12 @@ class DealerProfile(models.Model):
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=10, blank=True)
-    latitude = models.DecimalField(max_digits=20, decimal_places=19, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=20, decimal_places=19, null=True, blank=True)
+    
+    # Improved Latitude and Longitude fields
+    # Using FloatField for better compatibility with geospatial libraries and typically sufficient precision
+    latitude = models.FloatField(null=True, blank=True, help_text="GPS Latitude")
+    longitude = models.FloatField(null=True, blank=True, help_text="GPS Longitude")
+    
     service_radius = models.PositiveIntegerField(default=10, blank=True, help_text="Service radius in KM")
     
     # Optional Contact Information
@@ -160,13 +163,6 @@ class DealerProfile(models.Model):
     total_bookings = models.PositiveIntegerField(default=0, editable=False)
     current_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, editable=False)
     
-    # Optional Business Hours
-    business_hours = models.JSONField(
-        default=dict, 
-        blank=True,
-        help_text="Business operating hours"
-    )
-    
     # Optional External Integration
     has_external_website = models.BooleanField(default=False)
     external_api_url = models.URLField(blank=True, null=True)
@@ -190,7 +186,6 @@ class DealerProfile(models.Model):
     def save(self, *args, **kwargs):
         # Auto-generate API key if needed
         if self.has_external_website and not self.api_key:
-            import secrets
             self.api_key = secrets.token_urlsafe(32)
         super().save(*args, **kwargs)
     

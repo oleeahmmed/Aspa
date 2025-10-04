@@ -46,7 +46,7 @@ class DealerProfileAdmin(ModelAdmin):
         'is_active', 
         'rating', 
         'total_bookings',
-        'pretty_business_hours'
+        # 'pretty_business_hours' # Removed
     ]
     
     list_filter = [
@@ -103,10 +103,6 @@ class DealerProfileAdmin(ModelAdmin):
             'fields': ('rating', 'total_reviews', 'total_bookings', 'current_balance'),
             'classes': ('collapse',)
         }),
-        ('Business Hours Configuration', {
-            'fields': ('business_hours',),
-            'classes': ('collapse',)
-        }),
         ('External Integration', {
             'fields': ('has_external_website', 'external_api_url', 'api_key', 'webhook_url', 'webhook_secret'),
             'classes': ('collapse',)
@@ -123,9 +119,8 @@ class DealerProfileAdmin(ModelAdmin):
         if obj.business_hours:
             return json.dumps(obj.business_hours, indent=2)
         return "-"
-    pretty_business_hours.short_description = "Business Hours"
 
-    
+
 @admin.register(CommissionHistory)
 class CommissionHistoryAdmin(ModelAdmin):
     list_display = ['dealer', 'commission_percentage', 'effective_date', 'created_at']
