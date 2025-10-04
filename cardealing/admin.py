@@ -6,15 +6,11 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from unfold.admin import ModelAdmin
-from django.utils.html import format_html
-from django.urls import path
-from django.http import HttpResponseRedirect
-from django.contrib import messages
 
 from .models import (
     CustomerProfile, DealerProfile, SubscriptionPlan, CommissionHistory,
     VehicleMake, VehicleModel, Vehicle,
-    ServiceCategory, Service, Technician, ServiceSlot, ServiceAddon, SlotTemplate,
+    ServiceCategory, Service, Technician, ServiceSlot, ServiceAddon,
     CancellationPolicy, Promotion, Booking, BookingAddon, BookingStatusHistory,
     VirtualCard, Payment, PayoutRequest, DealerPayout, BalanceTransaction,
     LoyaltyTransaction, Review,
@@ -42,10 +38,94 @@ class SubscriptionPlanAdmin(ModelAdmin):
 
 @admin.register(DealerProfile)
 class DealerProfileAdmin(ModelAdmin):
-    list_display = ['business_name', 'user', 'city', 'is_approved', 'is_active', 'rating']
-    list_filter = ['is_approved', 'is_active', 'city']
-    search_fields = ['business_name', 'user__username']
+    list_display = [
+        'business_name', 
+        'user', 
+        'city', 
+        'is_approved', 
+        'is_active', 
+        'rating', 
+        'total_bookings',
+        'pretty_business_hours'
+    ]
+    
+    list_filter = [
+        'is_approved', 
+        'is_active', 
+        'city', 
+        'business_type', 
+        'subscription_plan'
+    ]
+    
+    search_fields = [
+        'business_name', 
+        'user__username', 
+        'business_license',
+        'business_email',
+        'bank_account_name'
+    ]
+    
+    readonly_fields = [
+        'rating', 
+        'total_reviews', 
+        'total_bookings', 
+        'current_balance', 
+        'api_key', 
+        'created_at', 
+        'updated_at'
+    ]
+    
+    list_editable = ['is_active']
+    
+    ordering = ['-is_approved', '-is_active', 'business_name']
+    
+    fieldsets = (
+        ('User & Business Information', {
+            'fields': ('user', 'business_name', 'business_license', 'business_type')
+        }),
+        ('Location Details', {
+            'fields': ('address', 'city', 'postal_code', 'latitude', 'longitude', 'service_radius')
+        }),
+        ('Contact Information', {
+            'fields': ('business_phone', 'business_email', 'website_url')
+        }),
+        ('Banking Information', {
+            'fields': ('bank_account_name', 'bank_account_number', 'bank_name', 'bank_routing_number'),
+            'classes': ('collapse',)
+        }),
+        ('Subscription & Commission', {
+            'fields': ('subscription_plan', 'commission_percentage')
+        }),
+        ('Status & Approval', {
+            'fields': ('is_approved', 'is_active')
+        }),
+        ('Performance Metrics (Read Only)', {
+            'fields': ('rating', 'total_reviews', 'total_bookings', 'current_balance'),
+            'classes': ('collapse',)
+        }),
+        ('Business Hours Configuration', {
+            'fields': ('business_hours',),
+            'classes': ('collapse',)
+        }),
+        ('External Integration', {
+            'fields': ('has_external_website', 'external_api_url', 'api_key', 'webhook_url', 'webhook_secret'),
+            'classes': ('collapse',)
+        }),
+        ('System Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def pretty_business_hours(self, obj):
+        """Display business hours JSON nicely in admin list view"""
+        import json
+        if obj.business_hours:
+            return json.dumps(obj.business_hours, indent=2)
+        return "-"
+    pretty_business_hours.short_description = "Business Hours"
 
+    
 @admin.register(CommissionHistory)
 class CommissionHistoryAdmin(ModelAdmin):
     list_display = ['dealer', 'commission_percentage', 'effective_date', 'created_at']
@@ -71,7 +151,7 @@ class VehicleAdmin(ModelAdmin):
     search_fields = ['license_plate', 'vin', 'owner__username']
 
 # =============================================================================
-# SERVICES & SLOT TEMPLATES
+# SERVICES
 # =============================================================================
 
 @admin.register(ServiceCategory)
@@ -81,114 +161,19 @@ class ServiceCategoryAdmin(ModelAdmin):
 
 @admin.register(Service)
 class ServiceAdmin(ModelAdmin):
-    list_display = ['name', 'dealer', 'category', 'base_price', 'is_active', 'slot_template_actions']
+    list_display = ['name', 'dealer', 'category', 'base_price', 'is_active']
     list_filter = ['is_active', 'is_featured']
     search_fields = ['name', 'dealer__username']
-    
-    def slot_template_actions(self, obj):
-        return format_html(
-            '<div class="flex gap-1">'
-            '<a class="button" href="{}" style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">7 Days</a>'
-            '<a class="button" href="{}" style="background: #2196F3; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">15 Days</a>'
-            '<a class="button" href="{}" style="background: #FF9800; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">30 Days</a>'
-            '</div>',
-            f'{obj.id}/generate_all_slots/7/',
-            f'{obj.id}/generate_all_slots/15/',
-            f'{obj.id}/generate_all_slots/30/'
-        )
-    slot_template_actions.short_description = 'Generate Slots'
-    
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('<path:object_id>/generate_all_slots/<int:days>/', 
-                 self.admin_site.admin_view(self.generate_all_slots_view),
-                 name='service_generate_all_slots'),
-        ]
-        return custom_urls + urls
-    
-    def generate_all_slots_view(self, request, object_id, days):
-        from .models import generate_all_slots_for_service
-        service = Service.objects.get(id=object_id)
-        
-        generated_slots = generate_all_slots_for_service(service, days)
-        
-        self.message_user(
-            request, 
-            f"Successfully generated {len(generated_slots)} slots from all templates for {days} days",
-            messages.SUCCESS
-        )
-        
-        return HttpResponseRedirect('../../')
 
 @admin.register(Technician)
 class TechnicianAdmin(ModelAdmin):
     list_display = ['name', 'dealer', 'phone_number', 'is_available']
     search_fields = ['name', 'phone_number']
 
-@admin.register(SlotTemplate)
-class SlotTemplateAdmin(ModelAdmin):
-    list_display = ['name', 'service', 'day_of_week', 'start_time', 'end_time', 'is_active', 'batch_actions']
-    list_filter = ['is_active', 'day_of_week', 'service__dealer']
-    search_fields = ['name', 'service__name']
-    
-    def batch_actions(self, obj):
-        return format_html(
-            '<div class="flex gap-1">'
-            '<a class="button" href="{}" style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">7 Days</a>'
-            '<a class="button" href="{}" style="background: #2196F3; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">15 Days</a>'
-            '<a class="button" href="{}" style="background: #FF9800; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">30 Days</a>'
-            '</div>',
-            f'{obj.id}/generate_slots/7/',
-            f'{obj.id}/generate_slots/15/',
-            f'{obj.id}/generate_slots/30/'
-        )
-    batch_actions.short_description = 'Generate Slots'
-    
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('<path:object_id>/generate_slots/<int:days>/', 
-                 self.admin_site.admin_view(self.generate_slots_view),
-                 name='slot_template_generate_slots'),
-        ]
-        return custom_urls + urls
-    
-    def generate_slots_view(self, request, object_id, days):
-        slot_template = SlotTemplate.objects.get(id=object_id)
-        
-        if days == 7:
-            generated_slots = slot_template.generate_slots_7_days()
-        elif days == 15:
-            generated_slots = slot_template.generate_slots_15_days()
-        elif days == 30:
-            generated_slots = slot_template.generate_slots_30_days()
-        else:
-            generated_slots = slot_template.generate_slots_for_days(days)
-        
-        self.message_user(
-            request, 
-            f"Successfully generated {len(generated_slots)} slots for {days} days from template '{slot_template.name}'",
-            messages.SUCCESS
-        )
-        
-        return HttpResponseRedirect('../../')
-
 @admin.register(ServiceSlot)
 class ServiceSlotAdmin(ModelAdmin):
-    list_display = ['service', 'date', 'start_time', 'end_time', 'available_capacity', 'is_active', 'slot_source']
-    list_filter = ['is_active', 'is_generated_from_template', 'date']
+    list_display = ['service', 'date', 'start_time', 'end_time', 'available_capacity', 'is_active']
     search_fields = ['service__name']
-    
-    def slot_source(self, obj):
-        if obj.is_generated_from_template:
-            return format_html(
-                '<span style="color: #4CAF50; font-weight: bold;">Template</span>'
-            )
-        return format_html(
-            '<span style="color: #2196F3; font-weight: bold;">Manual</span>'
-        )
-    slot_source.short_description = 'Source'
 
 @admin.register(ServiceAddon)
 class ServiceAddonAdmin(ModelAdmin):

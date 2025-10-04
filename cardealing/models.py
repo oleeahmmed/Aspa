@@ -96,11 +96,14 @@ class SubscriptionPlan(models.Model):
         return f"{self.name} - ${self.price}"
 
 class DealerProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='dealer_profile')
+    """Simplified Dealer Profile - Most fields are optional"""
     
-    # Business Information
+    # Required Fields Only
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='dealer_profile')
     business_name = models.CharField(max_length=200)
-    business_license = models.CharField(max_length=100, unique=True)
+    
+    # Optional Business Information
+    business_license = models.CharField(max_length=100, blank=True, null=True)
     business_type = models.CharField(
         max_length=50,
         choices=[
@@ -109,63 +112,69 @@ class DealerProfile(models.Model):
             ('mobile_service', 'Mobile Service'),
             ('dealership', 'Car Dealership')
         ],
-        default='garage'
+        default='garage',
+        blank=True
     )
     
-    # Location Details
-    address = models.TextField()
-    city = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=10)
-    latitude = models.DecimalField(max_digits=20, decimal_places=6)
-    longitude = models.DecimalField(max_digits=20, decimal_places=6)
-    service_radius = models.PositiveIntegerField(default=10, help_text="Service radius in KM")
+    # Optional Location Details
+    address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    postal_code = models.CharField(max_length=10, blank=True)
+    latitude = models.DecimalField(max_digits=20, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=20, decimal_places=6, null=True, blank=True)
+    service_radius = models.PositiveIntegerField(default=10, blank=True, help_text="Service radius in KM")
     
-    # Contact Information
-    business_phone = models.CharField(max_length=20)
+    # Optional Contact Information
+    business_phone = models.CharField(max_length=20, blank=True)
     business_email = models.EmailField(blank=True)
     website_url = models.URLField(blank=True)
     
-    # Financial Information
-    bank_account_name = models.CharField(max_length=200)
-    bank_account_number = models.CharField(
-        max_length=50,
-        validators=[RegexValidator(r'^\d{8,20}$', 'Invalid bank account number')]
-    )
-    bank_name = models.CharField(max_length=100)
-    bank_routing_number = models.CharField(
-        max_length=20,
-        validators=[RegexValidator(r'^\d{9}$', 'Invalid routing number')]
-    )
+    # Optional Banking Information
+    bank_account_name = models.CharField(max_length=200, blank=True)
+    bank_account_number = models.CharField(max_length=50, blank=True)
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_routing_number = models.CharField(max_length=20, blank=True)
     
     # Commission & Subscription
     commission_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, default=15.00,
+        max_digits=5, 
+        decimal_places=2, 
+        default=15.00,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Platform commission percentage"
     )
-    subscription_plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True)
-    
-    # Status & Performance
-    is_approved = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
-    total_reviews = models.PositiveIntegerField(default=0)
-    total_bookings = models.PositiveIntegerField(default=0)
-    current_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
-    # Business Hours
-    business_hours = models.JSONField(
-        default=dict, 
-        help_text="Business operating hours in format: {'monday': {'is_open': true, 'start': '09:00', 'end': '18:00'}}"
+    subscription_plan = models.ForeignKey(
+        SubscriptionPlan, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
     )
     
-    # External Integration
+    # Status (Simple)
+    is_approved = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    
+    # Auto-calculated Performance Metrics
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00, editable=False)
+    total_reviews = models.PositiveIntegerField(default=0, editable=False)
+    total_bookings = models.PositiveIntegerField(default=0, editable=False)
+    current_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, editable=False)
+    
+    # Optional Business Hours
+    business_hours = models.JSONField(
+        default=dict, 
+        blank=True,
+        help_text="Business operating hours"
+    )
+    
+    # Optional External Integration
     has_external_website = models.BooleanField(default=False)
     external_api_url = models.URLField(blank=True, null=True)
-    api_key = models.CharField(max_length=100, unique=True, blank=True)
+    api_key = models.CharField(max_length=100, blank=True, editable=False)
     webhook_url = models.URLField(blank=True, null=True)
     webhook_secret = models.CharField(max_length=255, blank=True)
     
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -175,9 +184,15 @@ class DealerProfile(models.Model):
         verbose_name_plural = "Dealer Profiles"
         indexes = [
             models.Index(fields=['is_approved', 'is_active']),
-            models.Index(fields=['city', 'is_active']),
-            models.Index(fields=['rating', '-total_reviews']),
+            models.Index(fields=['city']),
         ]
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate API key if needed
+        if self.has_external_website and not self.api_key:
+            import secrets
+            self.api_key = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.business_name} ({self.user.username})"
@@ -407,12 +422,18 @@ class Technician(models.Model):
     def __str__(self):
         return f"{self.name} - {self.dealer.business_name}"
 
+from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from datetime import datetime, timedelta, time as dt_time
+
 # =============================================================================
-# ENHANCED SERVICE SLOT TEMPLATE SYSTEM
+# SLOT TEMPLATE MODEL
 # =============================================================================
 
 class SlotTemplate(models.Model):
     """Template for generating recurring service slots"""
+    
     DAYS_OF_WEEK = [
         (0, 'Monday'),
         (1, 'Tuesday'),
@@ -423,32 +444,64 @@ class SlotTemplate(models.Model):
         (6, 'Sunday'),
     ]
     
-    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='slot_templates')
-    name = models.CharField(max_length=100, help_text="e.g., Morning Shift, Evening Shift")
+    # Basic Information
+    service = models.ForeignKey('Service', on_delete=models.CASCADE, related_name='slot_templates')
+    name = models.CharField(max_length=100, help_text="e.g., Morning Shift, Afternoon Shift")
     
-    # Day and Time Configuration
-    day_of_week = models.PositiveSmallIntegerField(choices=DAYS_OF_WEEK)
-    start_time = models.TimeField()
-    end_time = models.TimeField()
+    # Schedule Configuration
+    day_of_week = models.PositiveSmallIntegerField(
+        choices=DAYS_OF_WEEK,
+        help_text="Which day of the week this template applies to"
+    )
+    start_time = models.TimeField(help_text="When the service window starts")
+    end_time = models.TimeField(help_text="When the service window ends")
     
-    # Slot Configuration
-    slot_duration = models.PositiveIntegerField(default=60, help_text="Slot duration in minutes")
-    slots_per_session = models.PositiveIntegerField(default=1, help_text="Number of concurrent slots")
-    buffer_between_slots = models.PositiveIntegerField(default=15, help_text="Buffer time between slots in minutes")
+    # Slot Generation Settings
+    slot_duration = models.PositiveIntegerField(
+        default=60,
+        validators=[MinValueValidator(15), MaxValueValidator(480)],
+        help_text="Duration of each slot in minutes (15-480)"
+    )
+    buffer_time = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(120)],
+        help_text="Buffer time between slots in minutes (0-120)"
+    )
     
-    # Capacity
-    total_capacity = models.PositiveIntegerField(default=1)
+    # Capacity Settings
+    capacity_per_slot = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text="How many bookings can be accepted per slot"
+    )
     
-    # Pricing (optional override)
-    custom_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # Pricing (Optional Override)
+    custom_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Leave blank to use service base price"
+    )
     
     # Validity Period
-    valid_from = models.DateField(default=timezone.now)
-    valid_until = models.DateField(null=True, blank=True)
+    valid_from = models.DateField(
+        default=timezone.now,
+        help_text="Start date for generating slots"
+    )
+    valid_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="End date for generating slots (leave blank for indefinite)"
+    )
     
     # Status
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Only active templates generate slots"
+    )
     
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -456,67 +509,119 @@ class SlotTemplate(models.Model):
         db_table = 'slot_templates'
         verbose_name = "Slot Template"
         verbose_name_plural = "Slot Templates"
-        ordering = ['day_of_week', 'start_time']
+        ordering = ['service', 'day_of_week', 'start_time']
+        indexes = [
+            models.Index(fields=['service', 'is_active']),
+            models.Index(fields=['day_of_week', 'is_active']),
+        ]
     
     def __str__(self):
-        return f"{self.service.name} - {self.get_day_of_week_display()} {self.start_time}-{self.end_time}"
+        return f"{self.service.name} - {self.get_day_of_week_display()} {self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')}"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
         
+        # Validate time range
+        if self.start_time >= self.end_time:
+            raise ValidationError("End time must be after start time")
+        
+        # Validate validity period
+        if self.valid_until and self.valid_from > self.valid_until:
+            raise ValidationError("Valid from date must be before valid until date")
+    
+    # =============================================================================
+    # SLOT GENERATION METHODS
+    # =============================================================================
+    
+    def _calculate_time_slots(self):
+        """Calculate individual time slots based on template configuration"""
+        slots = []
+        
+        # Convert times to datetime for calculation
+        current_datetime = datetime.combine(datetime.today(), self.start_time)
+        end_datetime = datetime.combine(datetime.today(), self.end_time)
+        
+        slot_duration_delta = timedelta(minutes=self.slot_duration)
+        buffer_delta = timedelta(minutes=self.buffer_time)
+        
+        while current_datetime + slot_duration_delta <= end_datetime:
+            slot_end_datetime = current_datetime + slot_duration_delta
+            
+            slots.append({
+                'start_time': current_datetime.time(),
+                'end_time': slot_end_datetime.time()
+            })
+            
+            # Move to next slot with buffer
+            current_datetime = slot_end_datetime + buffer_delta
+        
+        return slots
+    
     def generate_slots_for_days(self, days_count):
         """
-        Generate slots for specified number of days from today
+        Generate service slots for the next N days
+        
+        Args:
+            days_count (int): Number of days to generate slots for
+            
+        Returns:
+            list: List of created ServiceSlot instances
         """
-        from django.utils import timezone
-        from datetime import timedelta
-
-        # Check if template is active
         if not self.is_active:
             return []
-
+        
         generated_slots = []
         start_date = timezone.now().date()
         end_date = start_date + timedelta(days=days_count)
+        
+        # Calculate time slots once
+        time_slots = self._calculate_time_slots()
+        
+        if not time_slots:
+            return []
+        
         current_date = start_date
-
+        
         while current_date <= end_date:
-            # Check if current date matches the template's day of week
+            # Check if this date matches our day of week
             if current_date.weekday() == self.day_of_week:
-                # Check if current date is within valid period
-                if self.valid_from and current_date < self.valid_from:
+                # Check validity period
+                if current_date < self.valid_from:
                     current_date += timedelta(days=1)
                     continue
-
+                
                 if self.valid_until and current_date > self.valid_until:
                     current_date += timedelta(days=1)
                     continue
-
-                # Calculate time slots for this day
-                slots = self._calculate_time_slots()
-
-                for slot_start, slot_end in slots:
+                
+                # Generate slots for this date
+                for time_slot in time_slots:
                     # Check if slot already exists
-                    if not ServiceSlot.objects.filter(
+                    existing_slot = ServiceSlot.objects.filter(
                         service=self.service,
                         date=current_date,
-                        start_time=slot_start
-                    ).exists():
-
+                        start_time=time_slot['start_time']
+                    ).first()
+                    
+                    if not existing_slot:
                         slot = ServiceSlot.objects.create(
                             service=self.service,
                             slot_template=self,
                             date=current_date,
-                            start_time=slot_start,
-                            end_time=slot_end,
-                            total_capacity=self.total_capacity,
-                            available_capacity=self.total_capacity,
+                            start_time=time_slot['start_time'],
+                            end_time=time_slot['end_time'],
+                            total_capacity=self.capacity_per_slot,
+                            available_capacity=self.capacity_per_slot,
                             custom_price=self.custom_price,
-                            is_generated_from_template=True,
-                            generation_notes=f"Generated from template: {self.name}"
+                            is_generated=True
                         )
                         generated_slots.append(slot)
-
+            
             current_date += timedelta(days=1)
-
+        
         return generated_slots
+    
+    # Convenience methods
     def generate_slots_7_days(self):
         """Generate slots for next 7 days"""
         return self.generate_slots_for_days(7)
@@ -528,66 +633,76 @@ class SlotTemplate(models.Model):
     def generate_slots_30_days(self):
         """Generate slots for next 30 days"""
         return self.generate_slots_for_days(30)
-    
-    def _calculate_time_slots(self):
-        """
-        Calculate time slots between start and end time
-        """
-        from datetime import datetime, time, timedelta
 
-        slots = []
-        current_time = datetime.combine(datetime.today(), self.start_time)
-        end_datetime = datetime.combine(datetime.today(), self.end_time)
 
-        # If start_time is after end_time, return empty list
-        if current_time >= end_datetime:
-            return slots
-
-        slot_duration_delta = timedelta(minutes=self.slot_duration)
-        buffer_delta = timedelta(minutes=self.buffer_between_slots)
-
-        while current_time + slot_duration_delta <= end_datetime:
-            slot_end = current_time + slot_duration_delta
-            slots.append((
-                current_time.time(),
-                slot_end.time()
-            ))
-            current_time = slot_end + buffer_delta
-
-        return slots
+# =============================================================================
+# SERVICE SLOT MODEL
+# =============================================================================
 
 class ServiceSlot(models.Model):
-    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='slots')
-    slot_template = models.ForeignKey(SlotTemplate, on_delete=models.SET_NULL, null=True, blank=True, related_name='generated_slots')
+    """Individual service slot that can be booked"""
     
-    # Time Information
-    date = models.DateField()
+    # Core Relationships
+    service = models.ForeignKey(
+        'Service',
+        on_delete=models.CASCADE,
+        related_name='slots'
+    )
+    slot_template = models.ForeignKey(
+        SlotTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='generated_slots',
+        help_text="Template that generated this slot (if applicable)"
+    )
+    
+    # Schedule
+    date = models.DateField(db_index=True)
     start_time = models.TimeField()
     end_time = models.TimeField()
     
     # Capacity Management
-    total_capacity = models.PositiveIntegerField(default=1, help_text="Total slots available")
-    available_capacity = models.PositiveIntegerField(default=1, help_text="Currently available slots")
+    total_capacity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text="Total bookings allowed for this slot"
+    )
+    available_capacity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(0)],
+        help_text="Currently available bookings"
+    )
     
-    # Pricing (can override service base price)
-    custom_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # Pricing
+    custom_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Override service base price for this slot"
+    )
     
-    # Assignment
-    assigned_technician = models.ForeignKey(Technician, on_delete=models.SET_NULL, null=True, blank=True)
+    # Status & Control
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Active slots can be booked"
+    )
+    is_blocked = models.BooleanField(
+        default=False,
+        help_text="Blocked slots cannot be booked"
+    )
+    block_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Reason for blocking this slot"
+    )
+    is_generated = models.BooleanField(
+        default=False,
+        help_text="Was this slot generated from a template?"
+    )
     
-    # Generation Info
-    is_generated_from_template = models.BooleanField(default=False)
-    generation_notes = models.CharField(max_length=255, blank=True)
-    
-    # Status
-    is_active = models.BooleanField(default=True)
-    is_blocked = models.BooleanField(default=False, help_text="Manually blocked by dealer")
-    block_reason = models.CharField(max_length=255, blank=True)
-    
-    # External Integration
-    external_slot_id = models.CharField(max_length=100, blank=True, null=True)
-    sync_with_external = models.BooleanField(default=False)
-    
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -595,34 +710,192 @@ class ServiceSlot(models.Model):
         db_table = 'service_slots'
         verbose_name = "Service Slot"
         verbose_name_plural = "Service Slots"
-        unique_together = ['service', 'date', 'start_time']
+        ordering = ['date', 'start_time']
+        unique_together = [['service', 'date', 'start_time']]
         indexes = [
-            models.Index(fields=['service', 'date', 'start_time']),
-            models.Index(fields=['date', 'is_active']),
+            models.Index(fields=['service', 'date', 'is_active']),
+            models.Index(fields=['date', 'is_active', 'is_blocked']),
             models.Index(fields=['slot_template']),
-            models.Index(fields=['is_generated_from_template']),
         ]
     
+    def __str__(self):
+        source = "Generated" if self.is_generated else "Manual"
+        return f"{self.service.name} - {self.date} {self.start_time.strftime('%H:%M')} [{source}]"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        
+        # Validate time range
+        if self.start_time >= self.end_time:
+            raise ValidationError("End time must be after start time")
+        
+        # Validate capacity
+        if self.available_capacity > self.total_capacity:
+            raise ValidationError("Available capacity cannot exceed total capacity")
+    
+    # =============================================================================
+    # PROPERTIES & UTILITY METHODS
+    # =============================================================================
+    
     @property
-    def is_available(self):
-        return self.is_active and not self.is_blocked and self.available_capacity > 0
+    def is_bookable(self):
+        """Check if this slot can be booked"""
+        return (
+            self.is_active and
+            not self.is_blocked and
+            self.available_capacity > 0 and
+            self.date >= timezone.now().date()
+        )
     
     @property
     def effective_price(self):
-        return self.custom_price or self.service.base_price
+        """Get the price for this slot"""
+        return self.custom_price if self.custom_price else self.service.base_price
     
-    def __str__(self):
-        source = "[Template]" if self.is_generated_from_template else "[Manual]"
-        return f"{self.service.name} - {self.date} {self.start_time} {source}"
+    @property
+    def booking_percentage(self):
+        """Calculate booking percentage"""
+        if self.total_capacity == 0:
+            return 0
+        return ((self.total_capacity - self.available_capacity) / self.total_capacity) * 100
+    
+    def decrease_capacity(self, amount=1):
+        """Decrease available capacity (when booking is made)"""
+        if self.available_capacity >= amount:
+            self.available_capacity -= amount
+            self.save(update_fields=['available_capacity'])
+            return True
+        return False
+    
+    def increase_capacity(self, amount=1):
+        """Increase available capacity (when booking is cancelled)"""
+        if self.available_capacity + amount <= self.total_capacity:
+            self.available_capacity += amount
+            self.save(update_fields=['available_capacity'])
+            return True
+        return False
+
 
 # =============================================================================
-# BATCH SLOT GENERATION METHODS
+# AVAILABLE SLOT MODEL (View/Query Model)
+# =============================================================================
+
+class AvailableSlot(models.Model):
+    """
+    Materialized view of available slots for faster queries
+    This model is populated by a periodic task or trigger
+    """
+    
+    # Denormalized fields for fast querying
+    service = models.ForeignKey('Service', on_delete=models.CASCADE, related_name='available_slots')
+    service_slot = models.OneToOneField(ServiceSlot, on_delete=models.CASCADE, related_name='availability_record')
+    
+    # Cached service information
+    service_name = models.CharField(max_length=200)
+    dealer_name = models.CharField(max_length=200)
+    category_name = models.CharField(max_length=100)
+    
+    # Schedule information
+    date = models.DateField(db_index=True)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    day_of_week = models.PositiveSmallIntegerField()
+    
+    # Capacity
+    available_capacity = models.PositiveIntegerField()
+    total_capacity = models.PositiveIntegerField()
+    
+    # Pricing
+    price = models.DecimalField(max_digits=8, decimal_places=2)
+    
+    # Location (for filtering)
+    city = models.CharField(max_length=100, blank=True)
+    
+    # Metadata
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'available_slots'
+        verbose_name = "Available Slot"
+        verbose_name_plural = "Available Slots"
+        ordering = ['date', 'start_time']
+        indexes = [
+            models.Index(fields=['date', 'city']),
+            models.Index(fields=['service', 'date']),
+            models.Index(fields=['date', 'available_capacity']),
+        ]
+    
+    def __str__(self):
+        return f"{self.service_name} - {self.date} {self.start_time.strftime('%H:%M')} ({self.available_capacity} available)"
+    
+    @classmethod
+    def refresh_available_slots(cls):
+        """
+        Refresh the available slots table
+        Call this periodically or after slot changes
+        """
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Clear old records
+            cls.objects.all().delete()
+            
+            # Get all bookable slots
+            bookable_slots = ServiceSlot.objects.filter(
+                is_active=True,
+                is_blocked=False,
+                available_capacity__gt=0,
+                date__gte=timezone.now().date()
+            ).select_related('service', 'service__dealer', 'service__category', 'service__dealer__dealer_profile')
+            
+            # Create availability records
+            available_records = []
+            for slot in bookable_slots:
+                dealer_profile = getattr(slot.service.dealer, 'dealer_profile', None)
+                
+                available_records.append(cls(
+                    service=slot.service,
+                    service_slot=slot,
+                    service_name=slot.service.name,
+                    dealer_name=dealer_profile.business_name if dealer_profile else slot.service.dealer.username,
+                    category_name=slot.service.category.name,
+                    date=slot.date,
+                    start_time=slot.start_time,
+                    end_time=slot.end_time,
+                    day_of_week=slot.date.weekday(),
+                    available_capacity=slot.available_capacity,
+                    total_capacity=slot.total_capacity,
+                    price=slot.effective_price,
+                    city=dealer_profile.city if dealer_profile else ''
+                ))
+            
+            # Bulk create
+            cls.objects.bulk_create(available_records, batch_size=1000)
+    
+    @classmethod
+    def get_available_slots_for_date(cls, date, city=None):
+        """Get all available slots for a specific date"""
+        queryset = cls.objects.filter(date=date)
+        if city:
+            queryset = queryset.filter(city=city)
+        return queryset
+    
+    @classmethod
+    def get_available_slots_for_service(cls, service_id, days=7):
+        """Get available slots for a service for next N days"""
+        end_date = timezone.now().date() + timedelta(days=days)
+        return cls.objects.filter(
+            service_id=service_id,
+            date__range=[timezone.now().date(), end_date]
+        )
+
+
+# =============================================================================
+# UTILITY FUNCTIONS
 # =============================================================================
 
 def generate_all_slots_for_service(service, days_count):
-    """
-    Generate slots for all active templates of a service for specified days
-    """
+    """Generate slots from all active templates for a service"""
     all_generated_slots = []
     active_templates = service.slot_templates.filter(is_active=True)
     
@@ -630,39 +903,27 @@ def generate_all_slots_for_service(service, days_count):
         slots = template.generate_slots_for_days(days_count)
         all_generated_slots.extend(slots)
     
+    # Refresh available slots after generation
+    AvailableSlot.refresh_available_slots()
+    
     return all_generated_slots
 
-def generate_7_days_slots_for_service(service):
-    """Generate slots for next 7 days for a service"""
-    return generate_all_slots_for_service(service, 7)
 
-def generate_15_days_slots_for_service(service):
-    """Generate slots for next 15 days for a service"""
-    return generate_all_slots_for_service(service, 15)
-
-def generate_30_days_slots_for_service(service):
-    """Generate slots for next 30 days for a service"""
-    return generate_all_slots_for_service(service, 30)
-
-def create_manual_slot(service, date, start_time, end_time, **kwargs):
-    """
-    Create a manual service slot with custom parameters
-    """
-    slot_data = {
-        'service': service,
-        'date': date,
-        'start_time': start_time,
-        'end_time': end_time,
-        'total_capacity': kwargs.get('total_capacity', 1),
-        'available_capacity': kwargs.get('available_capacity', 1),
-        'custom_price': kwargs.get('custom_price'),
-        'assigned_technician': kwargs.get('assigned_technician'),
-        'is_generated_from_template': False,
-        'generation_notes': kwargs.get('generation_notes', 'Manually created slot'),
-    }
+def bulk_generate_slots_for_all_services(days_count=7):
+    """Generate slots for all services with active templates"""
+    from django.db.models import Exists, OuterRef
     
-    return ServiceSlot.objects.create(**slot_data)
-
+    # Get services that have active templates
+    services_with_templates = Service.objects.filter(
+        Exists(SlotTemplate.objects.filter(service=OuterRef('pk'), is_active=True))
+    )
+    
+    total_generated = 0
+    for service in services_with_templates:
+        slots = generate_all_slots_for_service(service, days_count)
+        total_generated += len(slots)
+    
+    return total_generated
 # =============================================================================
 # 4. BOOKING SYSTEM WITH CANCELLATION POLICIES
 # =============================================================================
