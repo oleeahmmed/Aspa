@@ -373,6 +373,40 @@ class CustomerProfileView(BaseAPIView):
         except Exception as e:
             logger.error(f"Update customer profile error: {e}")
             return self.fail({'detail': str(e)}, "আপডেট ব্যর্থ")
+class CustomerProfileView(BaseAPIView):
+    """Get/Update customer profile"""
+
+    def get(self, request):
+        try:
+            # Auto-create if not exists
+            prof, created = CustomerProfile.objects.get_or_create(
+                user=request.user,
+                defaults={}
+            )
+            return self.ok(CustomerProfileSerializer(prof).data)
+        except Exception as e:
+            logger.error(f"Get customer profile error: {e}")
+            return self.fail({'detail': str(e)}, "প্রোফাইল লোড ব্যর্থ")
+
+    def patch(self, request):
+        try:
+            # Auto-create if not exists
+            prof, created = CustomerProfile.objects.get_or_create(
+                user=request.user,
+                defaults={}
+            )
+            
+            ser = CustomerProfileSerializer(prof, data=request.data, partial=True)
+            if ser.is_valid():
+                ser.save()
+                return self.ok(ser.data, "প্রোফাইল আপডেট সফল")
+            return self.fail(ser.errors, "ভ্যালিডেশন ত্রুটি")
+
+        except DjangoValidationError as e:
+            return self.fail({'validation': str(e)}, "ভ্যালিডেশন ত্রুটি")
+        except Exception as e:
+            logger.error(f"Update customer profile error: {e}")
+            return self.fail({'detail': str(e)}, "আপডেট ব্যর্থ")
 
 
 class DealerProfileView(BaseAPIView):
@@ -380,7 +414,15 @@ class DealerProfileView(BaseAPIView):
 
     def get(self, request):
         try:
-            prof = get_object_or_404(DealerProfile, user=request.user)
+            # Check if dealer profile exists, if not return helpful error
+            if not hasattr(request.user, 'dealer_profile'):
+                return self.fail(
+                    {'detail': 'আপনার ডিলার প্রোফাইল নেই। আপনি customer হিসেবে নিবন্ধিত।'},
+                    "প্রোফাইল পাওয়া যায়নি",
+                    status.HTTP_404_NOT_FOUND
+                )
+            
+            prof = request.user.dealer_profile
             return self.ok(DealerProfileSerializer(prof).data)
         except Exception as e:
             logger.error(f"Get dealer profile error: {e}")
@@ -388,7 +430,14 @@ class DealerProfileView(BaseAPIView):
 
     def patch(self, request):
         try:
-            prof = get_object_or_404(DealerProfile, user=request.user)
+            if not hasattr(request.user, 'dealer_profile'):
+                return self.fail(
+                    {'detail': 'আপনার ডিলার প্রোফাইল নেই। আপনি customer হিসেবে নিবন্ধিত।'},
+                    "প্রোফাইল পাওয়া যায়নি",
+                    status.HTTP_404_NOT_FOUND
+                )
+            
+            prof = request.user.dealer_profile
             ser = DealerProfileSerializer(prof, data=request.data, partial=True)
 
             if ser.is_valid():
